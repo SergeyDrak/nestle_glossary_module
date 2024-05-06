@@ -1,0 +1,14 @@
+.drak{
+  border: none!important;
+  border-bottom: 1px solid #0D7978!important;
+  padding: 0!important;
+  cursor: pointer;
+}
+.read-more{
+  color: white!important;
+  display: block!important;
+  text-decoration: none!important;
+  font-family: "Roboto Slab";
+  font-size: 14px;
+}
+

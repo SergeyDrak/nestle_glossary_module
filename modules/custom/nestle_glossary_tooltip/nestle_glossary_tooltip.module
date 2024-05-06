@@ -1,0 +1,145 @@
+<?php
+
+/**
+ * @file
+ * This is the module to create a tooltips for taxonomy title words.
+ */
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Implements hook_help().
+ */
+function nestle_glossary_tooltip_help($route_name, RouteMatchInterface $route_match) {
+  if ($route_name === 'help.page.nestle_glossary_tooltip') {
+    $readme_file = file_exists(__DIR__ . '/README.md') ? __DIR__ . '/README.md' : __DIR__ . '/README.txt';
+    if (!file_exists($readme_file)) {
+      return NULL;
+    }
+    $text = file_get_contents($readme_file);
+    if (!\Drupal::moduleHandler()->moduleExists('markdown')) {
+      return '<pre>' . $text . '</pre>';
+    }
+    else {
+      // Use the Markdown filter to render the README.
+      $filter_manager = \Drupal::service('plugin.manager.filter');
+      $settings = \Drupal::configFactory()->get('markdown.settings')->getRawData();
+      $config = ['settings' => $settings];
+      $filter = $filter_manager->createInstance('markdown', $config);
+      return $filter->process($text, 'en');
+    }
+  }
+  return NULL;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function nestle_glossary_tooltip_theme($existing, $type, $theme, $path) {
+  return [
+    'nestle_glossary_tooltip' => [
+      'variables' => [
+        'title' => NULL,
+        'description' => NULL,
+      ],
+    ],
+  ];
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function nestle_glossary_tooltip_form_filter_format_edit_form_alter(array &$form, FormStateInterface $form_state, $form_id) {
+  // Add an additional validate callback to edit filter form
+  $form['#validate'][] = '_nestle_glossary_filter_form_validate';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function nestle_glossary_tooltip_form_filter_format_add_form_alter(array &$form, FormStateInterface $form_state, $form_id) {
+  // Add an additional validate callback  to add filter form
+  $form['#validate'][] = '_nestle_glossary_filter_form_validate';
+}
+
+/**
+ * Validate callback to ensure filter order and allowed_html are compatible.
+ */
+function _nestle_glossary_filter_form_validate($form, FormStateInterface $form_state) {
+  if ($form_state->getTriggeringElement()['#name'] !== 'op') {
+    return;
+  }
+
+  $allowed_html_path = [
+    'filters',
+    'filter_html',
+    'settings',
+    'allowed_html',
+  ];
+
+  $filter_html_settings_path = [
+    'filters',
+    'filter_html',
+    'settings',
+  ];
+
+  $filter_html_enabled = $form_state->getValue([
+    'filters',
+    'filter_html',
+    'status',
+  ]);
+
+  $filter_tooltips_enabled = $form_state->getValue([
+    'filters',
+    'filter_tooltips',
+    'status',
+  ]);
+
+  if (!$filter_tooltips_enabled) {
+    return;
+  }
+
+  $get_filter_label = function ($filter_plugin_id) use ($form) {
+    return (string) $form['filters']['order'][$filter_plugin_id]['filter']['#markup'];
+  };
+
+  if ($filter_html_enabled && $form_state->getValue($allowed_html_path)) {
+
+    /** @var \Drupal\filter\Entity\FilterFormat $filter_format */
+    $filter_format = $form_state->getFormObject()->getEntity();
+
+    $filter_html = clone $filter_format->filters()->get('filter_html');
+    $filter_html->setConfiguration(['settings' => $form_state->getValue($filter_html_settings_path)]);
+    $restrictions = $filter_html->getHTMLRestrictions();
+    $allowed = $restrictions['allowed'];
+
+    // Require `<a>` HTML tag if filter_html is enabled.
+    if (!isset($allowed['a'])) {
+      $form_state->setError($form['filters']['settings']['filter_html']['allowed_html'], t('The %filter-tooltips-filter-label filter requires <code>&lt;a&gt;</code> among the allowed HTML tags.', [
+        '%filter-tooltips-filter-label' => $get_filter_label('filter_tooltips'),
+      ]));
+    }
+    else {
+      $required_attributes = [
+        'class',
+        'data-explanation',
+      ];
+
+      // If there are no attributes, the allowed item is set to FALSE,
+      // otherwise, it is set to an array.
+      if ($allowed['a'] === FALSE) {
+        $missing_attributes = $required_attributes;
+      }
+      else {
+        $missing_attributes = array_diff($required_attributes, array_keys($allowed['a']));
+      }
+
+      if ($missing_attributes) {
+        $form_state->setError($form['filters']['settings']['filter_html']['allowed_html'], t('The <code>&lt;a&gt;</code> tag in the allowed HTML tags is missing the following attributes: <code>%list</code>.', [
+          '%list' => implode(', ', $missing_attributes),
+        ]));
+      }
+    }
+  }
+}

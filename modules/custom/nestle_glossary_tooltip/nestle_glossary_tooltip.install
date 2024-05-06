@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Nestle Glossary Tooltip
+ *   module.
+ */
+
+use Drupal\taxonomy\Entity\Vocabulary;
+
+/**
+ * Implements hook_install().
+ */
+function nestle_glossary_tooltip_install() {
+  $vid = "nestle_glossary";
+  $name = "Nestle Glossary";
+  $vocabularies = Vocabulary::loadMultiple();
+
+  if (!isset($vocabularies[$vid])) {
+    $vocabulary = Vocabulary::create([
+      'vid' => $vid,
+      'description' => t('A storage of words for which tooltips from the description will be used'),
+      'name' => $name,
+    ])->save();
+  }
+}
